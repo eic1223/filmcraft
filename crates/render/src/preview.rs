@@ -381,6 +381,7 @@ pub fn effect_cost_ms(id: &str) -> f64 {
         | "invert"
         | "ultra_key"
         | "four_color_gradient"
+        | "four_color_gradient_resolve"
         | "lumetri"
         | "color_balance"
         | "gamma_correction"

@@ -64,7 +64,7 @@ impl Default for GeneralPrefs {
     fn default() -> Self {
         Self {
             interface_language: "system".into(),
-            at_startup: "showHome".into(),
+            at_startup: "openMostRecent".into(),
             when_opening_project: "showOpenDialog".into(),
             bins_double_click: "openInPlace".into(),
             bins_cmd_double_click: "openNewTab".into(),

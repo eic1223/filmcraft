@@ -739,6 +739,22 @@ fn build_effects() -> Vec<EffectDef> {
                 f("opacity", "Opacity", 100.0, 0.0, 100.0, "%"),
             ],
         ),
+        // DaVinci Resolve's "Four Color Gradient": four corner colours blended bilinearly, with the
+        // 50 % point of each axis moved to (center_x, center_y) (0.5 = a plain bilinear blend).
+        video(
+            "four_color_gradient_resolve",
+            "Four Color Gradient (Resolve)",
+            GENERATE,
+            vec![
+                f("center_x", "Center X", 0.5, 0.05, 0.95, ""),
+                f("center_y", "Center Y", 0.5, 0.05, 0.95, ""),
+                col("ul", "Upper Left Color", [1.0, 1.0, 0.0, 1.0]),
+                col("ur", "Upper Right Color", [0.0, 1.0, 0.0, 1.0]),
+                col("ll", "Lower Left Color", [1.0, 0.0, 1.0, 1.0]),
+                col("lr", "Lower Right Color", [0.0, 0.0, 1.0, 1.0]),
+                f("opacity", "Opacity", 100.0, 0.0, 100.0, "%"),
+            ],
+        ),
         video(
             "ramp",
             "Ramp",

@@ -389,6 +389,25 @@ pub fn apply(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
                 dec(acc.map(|v| v / wsum))
             });
         }
+        "four_color_gradient_resolve" => {
+            let cs = [color(e, "ul", cx), color(e, "ur", cx), color(e, "ll", cx), color(e, "lr", cx)];
+            let op = f(e, "opacity", cx) / 100.0;
+            let (w, h) = (img.w as f32, img.h as f32);
+            let (mx, my) = (f(e, "center_x", cx).clamp(0.01, 0.99), f(e, "center_y", cx).clamp(0.01, 0.99));
+            // piecewise-linear remap: the centre maps to 0.5, the frame edges to 0 and 1
+            let remap = |t: f32, c: f32| if t <= c { 0.5 * t / c } else { 0.5 + 0.5 * (t - c) / (1.0 - c) };
+            fill_over(img, op, |x, y| {
+                let (u, v) = (remap((x / w).clamp(0.0, 1.0), mx), remap((y / h).clamp(0.0, 1.0), my));
+                let wt = [(1.0 - u) * (1.0 - v), u * (1.0 - v), (1.0 - u) * v, u * v];
+                let mut acc = [0.0f32; 3];
+                for (i, c) in cs.iter().enumerate() {
+                    for k in 0..3 {
+                        acc[k] += c[k] * wt[i];
+                    }
+                }
+                dec(acc)
+            });
+        }
         "ramp" => {
             let s = point(e, "start", cx, img);
             let en = point(e, "end", cx, img);
