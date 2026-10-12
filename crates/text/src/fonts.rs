@@ -500,7 +500,7 @@ pub fn fallback_for(c: char, prefer: FaceId) -> FaceId {
     }
     // then well-known CJK system families (Hangul, kana, Han), nearest weight and same
     // italic-ness first; loads only the probed face, so a system scan stays cheap
-    const CJK_FAMILIES: [&str; 6] = ["Noto Sans KR", "Noto Sans JP", "Noto Sans CJK KR", "Apple SD Gothic Neo", "Hiragino Sans", "Arial Unicode MS"];
+    const CJK_FAMILIES: [&str; 6] = ["Noto Sans JP", "Noto Sans KR", "Noto Sans CJK KR", "Apple SD Gothic Neo", "Hiragino Sans", "Arial Unicode MS"];
     for fam in CJK_FAMILIES {
         let mut cands: Vec<&Arc<Face>> = faces.iter().filter(|f| f.info.origin != "bundled" && f.info.family.eq_ignore_ascii_case(fam)).collect();
         cands.sort_by_key(|f| (f.info.italic != p.info.italic, f.info.weight.abs_diff(p.info.weight)));
