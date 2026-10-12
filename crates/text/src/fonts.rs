@@ -67,6 +67,8 @@ pub struct FaceInfo {
     pub weight: u16,
     pub italic: bool,
     pub index: u32,
+    /// Variation coordinates of a variable font's named instance (empty for static faces).
+    pub coords: Vec<([u8; 4], f32)>,
     pub data: FaceData,
     /// "bundled", "system", …
     pub origin: &'static str,
@@ -143,7 +145,7 @@ impl FontSource for DirectorySource {
 }
 
 fn info_from(n: FaceNames, data: FaceData, origin: &'static str) -> FaceInfo {
-    FaceInfo { family: n.family, style: n.style, weight: n.weight, italic: n.italic, index: n.index, data, origin }
+    FaceInfo { family: n.family, style: n.style, weight: n.weight, italic: n.italic, index: n.index, coords: n.coords, data, origin }
 }
 
 /// A loaded (or loadable) face.
@@ -205,6 +207,15 @@ impl Face {
         let f = self.font()?;
         Some(self.shaper.get_or_init(|| harfrust::ShaperData::new(&f)))
     }
+    /// The variation location of this face (default for static faces).
+    pub fn location(&self) -> skrifa::instance::Location {
+        match self.font() {
+            Some(f) if !self.info.coords.is_empty() => {
+                f.axes().location(self.info.coords.iter().map(|(t, v)| (skrifa::Tag::new(t), *v)))
+            }
+            _ => skrifa::instance::Location::default(),
+        }
+    }
     pub fn units_per_em(&self) -> f32 {
         self.font().map(|f| f.metrics(Size::unscaled(), LocationRef::default()).units_per_em as f32).filter(|u| *u > 0.0).unwrap_or(1000.0)
     }
@@ -236,7 +247,7 @@ impl Face {
         let units = match font.vorg() {
             Ok(table) => f32::from(table.vertical_origin_y(glyph)),
             Err(_) => {
-                let bounds = font.glyph_metrics(Size::unscaled(), LocationRef::default()).bounds(glyph)?;
+                let bounds = font.glyph_metrics(Size::unscaled(), &self.location()).bounds(glyph)?;
                 bounds.y_max + f32::from(font.vmtx().ok()?.side_bearing(glyph)?)
             }
         };
@@ -256,7 +267,7 @@ impl Face {
                 ..Default::default()
             };
         };
-        let m = f.metrics(Size::new(px), LocationRef::default());
+        let m = f.metrics(Size::new(px), &self.location());
         VMetrics {
             ascent: m.ascent,
             descent: -m.descent,
@@ -592,6 +603,7 @@ mod tests {
             weight: 400,
             italic: false,
             index: 0,
+            coords: Vec::new(),
             data: FaceData::File(path.clone()),
             origin: "system",
         };

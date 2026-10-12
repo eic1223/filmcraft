@@ -13,6 +13,9 @@ pub struct FaceNames {
     pub full_name: String,
     pub weight: u16,
     pub italic: bool,
+    /// Variation coordinates (axis tag, value) for a named instance of a variable font; empty for
+    /// ordinary static faces.
+    pub coords: Vec<([u8; 4], f32)>,
 }
 
 fn be16(b: &[u8], o: usize) -> Option<u16> {
@@ -42,7 +45,7 @@ pub fn read_faces<R: Read + Seek>(r: &mut R) -> Vec<FaceNames> {
     } else {
         vec![0]
     };
-    offsets.iter().enumerate().filter_map(|(i, &o)| read_face(r, o as u64, i as u32)).collect()
+    offsets.iter().enumerate().filter_map(|(i, &o)| read_face(r, o as u64, i as u32)).flatten().collect()
 }
 
 /// Names from in-memory font data.
@@ -50,7 +53,42 @@ pub fn read_faces_bytes(data: &[u8]) -> Vec<FaceNames> {
     read_faces(&mut std::io::Cursor::new(data))
 }
 
-fn read_face<R: Read + Seek>(r: &mut R, off: u64, index: u32) -> Option<FaceNames> {
+fn fixed(b: &[u8], o: usize) -> Option<f32> {
+    Some(be32(b, o)? as i32 as f32 / 65536.0)
+}
+
+/// Named instances (Thin … Black) of a variable font's `fvar` table: (name id, coordinates).
+fn fvar_instances(fv: &[u8]) -> Vec<(u16, Vec<([u8; 4], f32)>)> {
+    let (Some(axes_off), Some(axis_count), Some(axis_size), Some(inst_count), Some(inst_size)) =
+        (be16(fv, 4), be16(fv, 8), be16(fv, 10), be16(fv, 12), be16(fv, 14))
+    else {
+        return Vec::new();
+    };
+    let (axes_off, axis_count, axis_size, inst_count, inst_size) =
+        (axes_off as usize, axis_count.min(16) as usize, axis_size as usize, inst_count.min(256) as usize, inst_size as usize);
+    if axis_size < 20 || inst_size < 4 + axis_count * 4 {
+        return Vec::new();
+    }
+    let mut tags = Vec::new();
+    for a in 0..axis_count {
+        let o = axes_off + a * axis_size;
+        let Some(t) = fv.get(o..o + 4) else { return Vec::new() };
+        tags.push([t[0], t[1], t[2], t[3]]);
+    }
+    let base = axes_off + axis_count * axis_size;
+    let mut out = Vec::new();
+    for i in 0..inst_count {
+        let o = base + i * inst_size;
+        let Some(name_id) = be16(fv, o) else { break };
+        let coords: Option<Vec<_>> = tags.iter().enumerate().map(|(k, t)| fixed(fv, o + 4 + k * 4).map(|v| (*t, v))).collect();
+        if let Some(c) = coords {
+            out.push((name_id, c));
+        }
+    }
+    out
+}
+
+fn read_face<R: Read + Seek>(r: &mut R, off: u64, index: u32) -> Option<Vec<FaceNames>> {
     let h = read_at(r, off, 12)?;
     let tag = &h[0..4];
     if tag != [0, 1, 0, 0] && tag != b"OTTO" && tag != b"true" {
@@ -60,12 +98,14 @@ fn read_face<R: Read + Seek>(r: &mut R, off: u64, index: u32) -> Option<FaceName
     let dir = read_at(r, off + 12, n * 16)?;
     let mut name = None;
     let mut os2 = None;
+    let mut fvar = None;
     for i in 0..n {
         let rec = &dir[i * 16..i * 16 + 16];
         let (o, l) = (be32(rec, 8)? as u64, be32(rec, 12)? as usize);
         match &rec[0..4] {
             b"name" => name = Some((o, l)),
             b"OS/2" => os2 = Some((o, l)),
+            b"fvar" => fvar = Some((o, l)),
             _ => {}
         }
     }
@@ -84,7 +124,29 @@ fn read_face<R: Read + Seek>(r: &mut R, off: u64, index: u32) -> Option<FaceName
     }
     let sl = style.to_ascii_lowercase();
     italic |= sl.contains("italic") || sl.contains("oblique");
-    Some(FaceNames { index, family, style, full_name, weight, italic })
+    let base = FaceNames { index, family: family.clone(), style, full_name, weight, italic, coords: Vec::new() };
+    // A variable font is offered as its named instances (Thin … Black), each with its own
+    // coordinates; without any, the default instance is used as before.
+    if let Some((fo, fl)) = fvar
+        && let Some(fb) = read_at(r, fo, fl)
+    {
+        let faces: Vec<FaceNames> = fvar_instances(&fb)
+            .into_iter()
+            .filter_map(|(nid, coords)| {
+                let style = name_string(&nb, nid)?;
+                let w = coords.iter().find(|(t, _)| t == b"wght").map_or(base.weight, |(_, v)| v.round().clamp(1.0, 1000.0) as u16);
+                let it = base.italic || coords.iter().any(|(t, v)| t == b"ital" && *v > 0.5) || {
+                    let sl = style.to_ascii_lowercase();
+                    sl.contains("italic") || sl.contains("oblique")
+                };
+                Some(FaceNames { index, family: family.clone(), full_name: format!("{family} {style}"), style, weight: w, italic: it, coords })
+            })
+            .collect();
+        if !faces.is_empty() {
+            return Some(faces);
+        }
+    }
+    Some(vec![base])
 }
 
 /// A name-table string by id, preferring Windows Unicode English, then any Unicode, then Mac Roman.
