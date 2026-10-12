@@ -493,11 +493,6 @@ pub fn fallback_for(c: char, prefer: FaceId) -> FaceId {
             return f.id;
         }
     }
-    for f in faces.iter().filter(|f| f.info.origin != "bundled" && f.bytes.get().is_some()) {
-        if f.has_char(c) {
-            return f.id;
-        }
-    }
     // then well-known CJK system families (Hangul, kana, Han), nearest weight and same
     // italic-ness first; loads only the probed face, so a system scan stays cheap
     const CJK_FAMILIES: [&str; 6] = ["Noto Sans JP", "Noto Sans KR", "Noto Sans CJK KR", "Apple SD Gothic Neo", "Hiragino Sans", "Arial Unicode MS"];
@@ -507,6 +502,11 @@ pub fn fallback_for(c: char, prefer: FaceId) -> FaceId {
         if let Some(f) = cands.first()
             && f.has_char(c)
         {
+            return f.id;
+        }
+    }
+    for f in faces.iter().filter(|f| f.info.origin != "bundled" && f.bytes.get().is_some()) {
+        if f.has_char(c) {
             return f.id;
         }
     }

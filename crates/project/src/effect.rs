@@ -743,7 +743,7 @@ fn build_effects() -> Vec<EffectDef> {
         // 50 % point of each axis moved to (center_x, center_y) (0.5 = a plain bilinear blend).
         video(
             "four_color_gradient_resolve",
-            "Four Color Gradient (Resolve)",
+            "Four Color Gradient (Davinci Resolve)",
             GENERATE,
             vec![
                 f("center_x", "Center X", 0.5, 0.05, 0.95, ""),
